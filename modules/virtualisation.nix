@@ -6,8 +6,8 @@
     enable = true;
     qemu = {
       package = pkgs.qemu_kvm;
-      ovmf.enable = true; # edk2 UEFI firmware for guests
-      ovmf.packages = [ pkgs.OVMFFull.fd ];
+      # OVMF (edk2 UEFI firmware) ships by default now — the qemu.ovmf submodule
+      # was removed upstream, so we no longer set it explicitly.
       swtpm.enable = true; # software TPM for Win11 / measured-boot guests
     };
   };
