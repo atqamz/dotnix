@@ -5,6 +5,7 @@
     ./tmux.nix
     ./git.nix
     ./desktop-links.nix
+    ./sops.nix
   ];
 
   home.username = "atqa";

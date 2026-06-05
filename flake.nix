@@ -13,6 +13,12 @@
     # follows). Single nixpkgs pin.
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Secret decryption at HM activation. Secrets themselves live in the private
+    # atqamz/secrets repo (cloned to ~/repo/secrets), referenced by sops.nix as
+    # runtime path strings — NOT a flake input, so eval/lock never needs them.
+    sops-nix.url = "github:Mic92/sops-nix";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, hyprland, home-manager, ... }@inputs: {
