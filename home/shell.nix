@@ -19,13 +19,24 @@
   # SSH_AUTH_SOCK at the gpg-agent socket; the bash integration sets GPG_TTY and
   # runs `gpg-connect-agent updatestartuptty` — so the old manual GPG_TTY export
   # and per-shell `ssh-agent -s` spawn are both gone. ssh keys load on first
-  # `ssh-add ~/.ssh/id_ed25519` and persist in ~/.gnupg/sshcontrol. Curses
-  # pinentry prompts in-terminal (swap to pinentry-qt for a graphical prompt).
+  # `ssh-add ~/.ssh/id_ed25519` and persist in ~/.gnupg/sshcontrol.
   programs.gpg.enable = true;
   services.gpg-agent = {
     enable = true;
     enableSshSupport = true;
-    pinentry.package = pkgs.pinentry-curses;
+
+    # Qt pinentry: Hyprland already pulls Qt (quickshell/alacritty), and unlike
+    # gnome3 it needs no gcr/D-Bus prompter to break. Modern pinentry-qt is the
+    # upstream Wayland-native pick and falls back to curses when there is no
+    # display (e.g. over tailscale ssh).
+    pinentry.package = pkgs.pinentry-qt;
+
+    # 24h passphrase cache (ported from the Fedora gpg-agent.conf). Both knobs
+    # must be raised — maxCacheTtl is the absolute cap on defaultCacheTtl.
+    defaultCacheTtl = 86400;
+    maxCacheTtl = 86400;
+    defaultCacheTtlSsh = 86400;
+    maxCacheTtlSsh = 86400;
   };
 
   # Arrow keys do prefix history search (was ~/dotfiles/readline/.inputrc).
