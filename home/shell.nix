@@ -20,12 +20,18 @@
   # One systemd-managed agent for both GPG and SSH. enableSshSupport points
   # SSH_AUTH_SOCK at the gpg-agent socket; the bash integration sets GPG_TTY and
   # runs `gpg-connect-agent updatestartuptty` — so the old manual GPG_TTY export
-  # and per-shell `ssh-agent -s` spawn are both gone. ssh keys load on first
-  # `ssh-add ~/.ssh/id_ed25519` and persist in ~/.gnupg/sshcontrol.
+  # and per-shell `ssh-agent -s` spawn are both gone. The ssh identity IS the
+  # personal GPG [A] auth subkey: sshKeys lists its keygrip, which HM writes to
+  # ~/.gnupg/sshcontrol so gpg-agent serves it over the ssh socket. No private
+  # key file is placed on disk (the on-disk id_ed25519 was retired).
   programs.gpg.enable = true;
   services.gpg-agent = {
     enable = true;
     enableSshSupport = true;
+
+    # Keygrip of the F1F60517 [A] auth subkey (gpg --with-keygrip -K). Listing it
+    # here is the declarative equivalent of appending to ~/.gnupg/sshcontrol.
+    sshKeys = [ "62863EC569FAA8E57719ECB56BA3571EA5695DFF" ];
 
     # Qt pinentry: Hyprland already pulls Qt (quickshell/alacritty), and unlike
     # gnome3 it needs no gcr/D-Bus prompter to break. pinentry-qt needs a Wayland
@@ -53,4 +59,10 @@
   };
 
   programs.bash.enable = true;
+
+  # Public half of the gpg [A] auth subkey. ssh's `IdentityFile ~/.ssh/id_ed25519`
+  # (with IdentitiesOnly) resolves this .pub and asks gpg-agent for the matching
+  # private. Public material, so a plain home.file in the store is fine — no sops.
+  home.file.".ssh/id_ed25519.pub".text =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOo5r0biuWxR3He8lNwmkM7Z49mFJZZv4e90ohoIPDX7 atqamz@gmail.com\n";
 }

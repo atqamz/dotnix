@@ -42,18 +42,10 @@ in
     defaultSopsFormat = "binary";
 
     secrets = {
-      # SSH personal key -> ~/.ssh (consumed directly as a key file by ssh/git;
-      # the exec-once `sshadd` also loads it into gpg-agent for the agent socket).
-      "id_ed25519" = {
-        sopsFile = "${secretsDir}/ssh/id_ed25519.sops.key";
-        path = "${config.home.homeDirectory}/.ssh/id_ed25519";
-        mode = "0600";
-      };
-      "id_ed25519_pub" = {
-        sopsFile = "${secretsDir}/ssh/id_ed25519.sops.pub";
-        path = "${config.home.homeDirectory}/.ssh/id_ed25519.pub";
-        mode = "0644";
-      };
+      # The personal ssh identity is the gpg [A] auth subkey served by gpg-agent
+      # (see home/shell.nix services.gpg-agent.sshKeys); no private key file is
+      # placed on disk. The public half is declared in home/shell.nix as a plain
+      # home.file (it is public, not a secret).
 
       # SSH yes2infra deploy key.
       "yes2infra_ed25519" = {
