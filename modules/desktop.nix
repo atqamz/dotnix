@@ -7,13 +7,21 @@
     enable = true;
     package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
     portalPackage = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
+
+    # Launch under UWSM so the systemd user manager actually activates
+    # graphical-session(-pre).target. Bare Hyprland leaves those targets dead
+    # (HM #8547), which would stop sops-nix.service and gpg-import-keys.service
+    # from ever auto-starting at login. withUWSM flips on programs.uwsm.enable.
+    withUWSM = true;
   };
 
   # --- Login: greetd + tuigreet launching Hyprland ---------------------------
   services.greetd = {
     enable = true;
     settings.default_session = {
-      command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland";
+      # Wrap Hyprland in uwsm (-e exports env to the systemd/dbus activation
+      # environment, -D sets the desktop name). hyprland.desktop -> start-hyprland.
+      command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd 'uwsm start -e -D Hyprland hyprland.desktop'";
       user = "greeter";
     };
   };
@@ -66,7 +74,10 @@
     gpu-screen-recorder
     alacritty
     fish
-    pinentry-gnome3
+    # Match services.gpg-agent.pinentry.package in home/shell.nix. Hyprland already
+    # pulls Qt, and decryption is gated to graphical-session.target (display up),
+    # so the Qt prompt can always draw.
+    pinentry-qt
   ];
 
   xdg.portal = {

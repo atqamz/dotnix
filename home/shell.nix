@@ -26,9 +26,11 @@
     enableSshSupport = true;
 
     # Qt pinentry: Hyprland already pulls Qt (quickshell/alacritty), and unlike
-    # gnome3 it needs no gcr/D-Bus prompter to break. Modern pinentry-qt is the
-    # upstream Wayland-native pick and falls back to curses when there is no
-    # display (e.g. over tailscale ssh).
+    # gnome3 it needs no gcr/D-Bus prompter to break. pinentry-qt needs a Wayland
+    # display and does NOT fall back to curses, so secret decryption is gated to
+    # graphical-session.target (see home/sops.nix) where uwsm has exported
+    # WAYLAND_DISPLAY. Over a display-less tailscale ssh, prefer a cached
+    # passphrase (24h TTL below) or run gpg with --pinentry-mode loopback.
     pinentry.package = pkgs.pinentry-qt;
 
     # 24h passphrase cache (ported from the Fedora gpg-agent.conf). Both knobs

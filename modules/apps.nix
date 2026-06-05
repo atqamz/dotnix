@@ -35,8 +35,11 @@
   ];
 
   # password-store (pass) — enable_password_store is true for pavg15.
+  # pinentry-qt to match the HM user gpg-agent (home/shell.nix). NOTE: the HM
+  # services.gpg-agent and this system programs.gnupg.agent both define a user
+  # gpg-agent; reconcile to one before relying on either (follow-up).
   programs.gnupg.agent = {
     enable = true;
-    pinentryPackage = pkgs.pinentry-gnome3;
+    pinentryPackage = pkgs.pinentry-qt;
   };
 }
