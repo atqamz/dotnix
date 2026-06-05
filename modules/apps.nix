@@ -34,12 +34,9 @@
     opentofu
   ];
 
-  # password-store (pass) — enable_password_store is true for pavg15.
-  # pinentry-qt to match the HM user gpg-agent (home/shell.nix). NOTE: the HM
-  # services.gpg-agent and this system programs.gnupg.agent both define a user
-  # gpg-agent; reconcile to one before relying on either (follow-up).
-  programs.gnupg.agent = {
-    enable = true;
-    pinentryPackage = pkgs.pinentry-qt;
-  };
+  # gpg-agent (with ssh support + pinentry-qt) is owned solely by Home Manager
+  # (home/shell.nix services.gpg-agent). No system programs.gnupg.agent here:
+  # two definitions would spawn two systemd user agents racing the same
+  # ~/.gnupg/gpg-agent.conf and socket. pinentry-qt stays available system-wide
+  # via modules/desktop.nix; gpg lands on PATH via HM programs.gpg.enable.
 }

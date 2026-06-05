@@ -15,6 +15,8 @@
     nix-direnv.enable = true;
   };
 
+  # The sole gpg-agent owner (no system programs.gnupg.agent — see modules/apps.nix),
+  # so exactly one systemd user agent writes ~/.gnupg/gpg-agent.conf and the socket.
   # One systemd-managed agent for both GPG and SSH. enableSshSupport points
   # SSH_AUTH_SOCK at the gpg-agent socket; the bash integration sets GPG_TTY and
   # runs `gpg-connect-agent updatestartuptty` — so the old manual GPG_TTY export
