@@ -27,6 +27,11 @@
   # --- Nix / flakes -----------------------------------------------------------
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.settings.trusted-users = [ "root" "atqa" ];
+  # Hyprland flake isn't on cache.nixos.org; its cachix serves binary hyprland +
+  # deps so we don't compile from source. Required because we deliberately do NOT
+  # make the hyprland input follow our nixpkgs (that would void this cache).
+  nix.settings.substituters = [ "https://hyprland.cachix.org" ];
+  nix.settings.trusted-public-keys = [ "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc=" ];
   nixpkgs.config.allowUnfree = true; # nvidia driver + unityhub are unfree
 
   # --- SSH (key-only, matches ssh-server role) -------------------------------
