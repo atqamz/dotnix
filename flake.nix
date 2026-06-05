@@ -31,7 +31,12 @@
 
     # Standalone HM env — apply with: home-manager switch --flake .#atqa
     homeConfigurations.atqa = home-manager.lib.homeManagerConfiguration {
-      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      # import (not legacyPackages) so allowUnfree applies — standalone HM has no
+      # system nixpkgs.config to inherit; bare legacyPackages would reject unfree.
+      pkgs = import nixpkgs {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+      };
       extraSpecialArgs = { inherit inputs; };
       modules = [ ./home/atqa.nix ];
     };
