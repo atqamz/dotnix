@@ -1,10 +1,31 @@
-{ ... }:
+{ pkgs, ... }:
 {
+  # User scripts on PATH (was the Fedora initExtra export). Language toolchains
+  # come from per-project nix devShells, not the global PATH.
+  home.sessionPath = [
+    "$HOME/.local/bin/scripts"
+    "$HOME/.local/bin"
+    "$HOME/bin"
+  ];
+
   # Per-project nix devShells, auto-loaded on cd via .envrc (`use flake`).
   # nix-direnv caches the shell so re-entry is instant.
   programs.direnv = {
     enable = true;
     nix-direnv.enable = true;
+  };
+
+  # One systemd-managed agent for both GPG and SSH. enableSshSupport points
+  # SSH_AUTH_SOCK at the gpg-agent socket; the bash integration sets GPG_TTY and
+  # runs `gpg-connect-agent updatestartuptty` — so the old manual GPG_TTY export
+  # and per-shell `ssh-agent -s` spawn are both gone. ssh keys load on first
+  # `ssh-add ~/.ssh/id_ed25519` and persist in ~/.gnupg/sshcontrol. Curses
+  # pinentry prompts in-terminal (swap to pinentry-qt for a graphical prompt).
+  programs.gpg.enable = true;
+  services.gpg-agent = {
+    enable = true;
+    enableSshSupport = true;
+    pinentry.package = pkgs.pinentry-curses;
   };
 
   # Arrow keys do prefix history search (was ~/dotfiles/readline/.inputrc).
@@ -16,29 +37,5 @@
     };
   };
 
-  programs.bash = {
-    enable = true;
-
-    # Only user scripts on the global PATH. Language toolchains (go, bun, node,
-    # rust, ...) come from per-project nix devShells (flake.nix + direnv), not
-    # global installs — so GOPATH/BUN_INSTALL and their bin dirs are GONE.
-    initExtra = ''
-      export PATH="$HOME/.local/bin/scripts:$HOME/.local/bin:$HOME/bin:$PATH"
-
-      # user drop-ins
-      if [ -d ~/.bashrc.d ]; then
-        for rc in ~/.bashrc.d/*; do [ -f "$rc" ] && . "$rc"; done
-        unset rc
-      fi
-
-      # gpg pinentry tty fallback
-      export GPG_TTY=$(tty)
-
-      # ssh-agent
-      if [ -z "$SSH_AUTH_SOCK" ]; then
-        eval "$(ssh-agent -s)" > /dev/null
-        ssh-add ~/.ssh/id_ed25519 2>/dev/null
-      fi
-    '';
-  };
+  programs.bash.enable = true;
 }

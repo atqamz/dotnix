@@ -8,8 +8,10 @@
     # Hyprland from upstream flake — pinned via flake.lock, no Qt-conflict roulette.
     hyprland.url = "github:hyprwm/Hyprland";
 
-    # Home-Manager — standalone user-env flake. Single nixpkgs pin via follows.
-    home-manager.url = "github:nix-community/home-manager";
+    # Home-Manager — standalone user-env flake, pinned to the 26.05 stable
+    # branch (stable module API; packages still come from unstable nixpkgs via
+    # follows). Single nixpkgs pin.
+    home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
   };
 
