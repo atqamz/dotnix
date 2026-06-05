@@ -1,0 +1,14 @@
+# Nix build artifacts
+result
+result-*
+
+# direnv
+.direnv/
+
+# decrypted secrets (defense-in-depth — real secrets live in atqamz/secrets)
+*.dec.*
+secrets.decrypted/
+
+# editor / OS cruft
+*.swp
+.DS_Store
