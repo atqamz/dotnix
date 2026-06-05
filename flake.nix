@@ -7,9 +7,13 @@
 
     # Hyprland from upstream flake — pinned via flake.lock, no Qt-conflict roulette.
     hyprland.url = "github:hyprwm/Hyprland";
+
+    # Home-Manager — standalone user-env flake. Single nixpkgs pin via follows.
+    home-manager.url = "github:nix-community/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, hyprland, ... }@inputs: {
+  outputs = { self, nixpkgs, hyprland, home-manager, ... }@inputs: {
     nixosConfigurations.pavg15 = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       specialArgs = { inherit inputs; };
@@ -21,6 +25,13 @@
         ./modules/apps.nix
         ./modules/virtualisation.nix
       ];
+    };
+
+    # Standalone HM env — apply with: home-manager switch --flake .#atqa
+    homeConfigurations.atqa = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      extraSpecialArgs = { inherit inputs; };
+      modules = [ ./home/atqa.nix ];
     };
   };
 }
