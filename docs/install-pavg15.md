@@ -33,8 +33,12 @@ Firmware boot entries (efibootmgr) — for awareness, not action:
    external drive, or another host.
 3. Note the real GPU bus IDs already in `modules/gpu.nix` (AMD `PCI:5:0:0`,
    NVIDIA `PCI:1:0:0`) — confirm unchanged with `lspci | grep -E 'VGA|3D'`.
-4. Have the private `atqamz/secrets` repo + GPG key reachable (sops-nix wiring
-   comes later; not needed for first boot).
+4. Have a GitHub PAT (or `gh auth login`) ready to clone the private
+   `atqamz/secrets` repo over **HTTPS** at first boot — the SSH key it contains
+   is not restored until after the first `home-manager switch`. Also have the
+   outer GPG passphrase for `gpg/personal.asc.gpg`. sops-nix wiring already ships
+   in the flake (`home/sops.nix`); secrets are restored during the first switch
+   (see Post-boot).
 5. Write the NixOS ISO (unstable, matching nixpkgs channel) to USB.
 
 ## Boot ISO + partition `nvme0n1` ONLY
@@ -114,24 +118,71 @@ Reboot, remove USB.
 
 ## Post-boot (first login)
 
+Log in to a **graphical Hyprland session** at the machine (not a bare TTY): the
+SOPS GPG key is unlocked through pinentry-qt, which needs a Wayland display.
+
 1. **GPU offload smoke test** — the Unity gate's residual risk:
    ```
    nvidia-offload glxinfo | grep -i renderer     # expect GTX 1650
    nvidia-offload unityhub                        # the make-or-break app
    ```
-2. **Home-Manager** — source dotfiles, then apply:
+
+2. **Bootstrap the SOPS root key BEFORE the first switch.** sops-nix decrypts at
+   activation using the GPG key in `~/.gnupg`, so it must be imported and unlocked
+   first. The personal SSH key does not exist yet — clone the secrets repo over
+   HTTPS (PAT / `gh auth login`), not SSH:
+   ```sh
+   git clone https://github.com/atqamz/secrets ~/repo/secrets
+   cd ~/repo/secrets
+   gpg --decrypt gpg/personal.asc.gpg | gpg --import          # outer AES256 wrapper passphrase
+   echo 'F1F60517602888C8D5E486EB8AD7D4A302EE6771:6:' | gpg --import-ownertrust
+   # Prime the key ITSELF: `gpg --import` caches only the wrapper passphrase, not
+   # the imported key's own. Exercise it once so gpg-agent caches it (24h TTL)
+   # before the switch, else sops-nix.service fires pinentry mid-activation:
+   SOPS_GPG_EXEC=gpg sops -d ssh/id_ed25519.sops.key >/dev/null
+   echo test | gpg --clearsign >/dev/null                     # signing key == SOPS key; confirm it works
+   ```
+
+3. **Home-Manager** — source dotfiles, then apply. The first eval fetches
+   `sops-nix` and writes its `flake.lock` entry (the lock has no sops-nix node yet
+   — there is no nix on the Fedora host to run `nix flake lock`):
    ```
    git clone https://github.com/atqamz/dotfiles ~/dotfiles   # symlink targets
    cd ~/repo/dotnix   # or wherever the flake lives post-install
    nix run home-manager -- switch --flake .#atqa
    ```
-   `home/desktop-links.nix` symlinks `~/.config/{hypr,quickshell}` →
-   `~/dotfiles/...` (live-edit). bash/tmux/git/readline are declarative.
+   On switch, `sops-nix.service` decrypts `ssh/*` to `~/.ssh` and places the
+   armored `gpg/*` keys, which `gpg-import-keys.service` then imports into
+   `~/.gnupg`. `home/desktop-links.nix` symlinks `~/.config/{hypr,quickshell}` →
+   `~/dotfiles/...` (live-edit); bash/tmux/git/readline are declarative.
    Confirm `git-credential-manager` resolved (pkg name unverified at write time).
-3. Verify Hyprland session from tuigreet, quickshell bar renders, tailscale up,
-   libvirtd, pipewire audio.
-4. Bring `sops-nix` online when the first secret-consuming module lands; real
-   secrets stay in private `atqamz/secrets`.
+
+4. **Verify secrets + session.**
+   ```
+   systemctl --user status sops-nix.service gpg-import-keys.service  # active/exited, 0
+   ssh -T git@github.com                                             # personal key restored
+   gpg -K                                                            # blankon/deploy-*/password-store present
+   ls -ld ~/.ssh                                                     # drwx------ (0700), not 0751
+   ```
+   Verify Hyprland from tuigreet, quickshell bar renders, tailscale up, libvirtd,
+   pipewire audio.
+
+> **Steady-state:** secrets decrypt into `$XDG_RUNTIME_DIR` (tmpfs) and
+> re-decrypt each login via `sops-nix.service`, pulled in by
+> `graphical-session.target` (activated by uwsm — bare Hyprland leaves it dead).
+> A non-interactive consumer that runs OUTSIDE a graphical login (e.g. a user
+> timer doing `git push` over SSH) needs `users.users.atqa.linger = true` AND the
+> key present — verify before relying on it.
+
+> **uwsm env follow-up (separate dotfiles change):** under uwsm, `hl.env(...)` in
+> `hyprland.lua` does NOT reach the systemd/dbus activation environment, so user
+> services don't inherit it. Move env into a new `~/.config/uwsm/{env,env-hyprland}`
+> stow module: Nvidia vars (`LIBVA_DRIVER_NAME`, `GBM_BACKEND`,
+> `__GLX_VENDOR_LIBRARY_NAME`), `XDG_DATA_DIRS`, `PATH`, and especially
+> `SSH_AUTH_SOCK` (currently hand-set to a stale `ssh-agent.socket`; on NixOS it
+> must point at the gpg-agent ssh socket) go in `env`; `HYPR*`/cursor vars in
+> `env-hyprland`. Route any quickshell power/logout action through `uwsm stop` /
+> `loginctl`, not `hyprctl dispatch exit`.
 
 ## Rollback
 
