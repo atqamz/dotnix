@@ -34,8 +34,9 @@ Firmware boot entries (efibootmgr) — for awareness, not action:
 3. Note the real GPU bus IDs already in `modules/gpu.nix` (AMD `PCI:5:0:0`,
    NVIDIA `PCI:1:0:0`) — confirm unchanged with `lspci | grep -E 'VGA|3D'`.
 4. Have a GitHub PAT (or `gh auth login`) ready to clone the private
-   `atqamz/secrets` repo over **HTTPS** at first boot — the SSH key it contains
-   is not restored until after the first `home-manager switch`. Also have the
+   `atqamz/secrets` repo over **HTTPS** at first boot — gpg-agent only starts
+   serving the SSH identity (the GPG `[A]` auth subkey) once that key is imported,
+   which happens during the first `home-manager switch`. Also have the
    outer GPG passphrase for `gpg/personal.asc.gpg`. sops-nix wiring already ships
    in the flake (`home/sops.nix`); secrets are restored during the first switch
    (see Post-boot).
@@ -129,7 +130,8 @@ SOPS GPG key is unlocked through pinentry-qt, which needs a Wayland display.
 
 2. **Bootstrap the SOPS root key BEFORE the first switch.** sops-nix decrypts at
    activation using the GPG key in `~/.gnupg`, so it must be imported and unlocked
-   first. The personal SSH key does not exist yet — clone the secrets repo over
+   first. gpg-agent is not serving SSH yet (the personal SSH identity is the GPG
+   `[A]` auth subkey, served only after this import) — clone the secrets repo over
    HTTPS (PAT / `gh auth login`), not SSH:
    ```sh
    git clone https://github.com/atqamz/secrets ~/repo/secrets
@@ -139,7 +141,7 @@ SOPS GPG key is unlocked through pinentry-qt, which needs a Wayland display.
    # Prime the key ITSELF: `gpg --import` caches only the wrapper passphrase, not
    # the imported key's own. Exercise it once so gpg-agent caches it (24h TTL)
    # before the switch, else sops-nix.service fires pinentry mid-activation:
-   SOPS_GPG_EXEC=gpg sops -d ssh/id_ed25519.sops.key >/dev/null
+   SOPS_GPG_EXEC=gpg sops -d ssh/yes2infra_ed25519.sops.key >/dev/null
    echo test | gpg --clearsign >/dev/null                     # signing key == SOPS key; confirm it works
    ```
 
@@ -160,7 +162,8 @@ SOPS GPG key is unlocked through pinentry-qt, which needs a Wayland display.
 4. **Verify secrets + session.**
    ```
    systemctl --user status sops-nix.service gpg-import-keys.service  # active/exited, 0
-   ssh -T git@github.com                                             # personal key restored
+   ssh-add -l                                                        # gpg-agent serves the [A] auth subkey
+   ssh -T git@github.com                                             # auth via that subkey
    gpg -K                                                            # blankon/deploy-*/password-store present
    ls -ld ~/.ssh                                                     # drwx------ (0700), not 0751
    ```
@@ -174,15 +177,15 @@ SOPS GPG key is unlocked through pinentry-qt, which needs a Wayland display.
 > timer doing `git push` over SSH) needs `users.users.atqa.linger = true` AND the
 > key present — verify before relying on it.
 
-> **uwsm env follow-up (separate dotfiles change):** under uwsm, `hl.env(...)` in
-> `hyprland.lua` does NOT reach the systemd/dbus activation environment, so user
-> services don't inherit it. Move env into a new `~/.config/uwsm/{env,env-hyprland}`
-> stow module: Nvidia vars (`LIBVA_DRIVER_NAME`, `GBM_BACKEND`,
-> `__GLX_VENDOR_LIBRARY_NAME`), `XDG_DATA_DIRS`, `PATH`, and especially
-> `SSH_AUTH_SOCK` (currently hand-set to a stale `ssh-agent.socket`; on NixOS it
-> must point at the gpg-agent ssh socket) go in `env`; `HYPR*`/cursor vars in
-> `env-hyprland`. Route any quickshell power/logout action through `uwsm stop` /
-> `loginctl`, not `hyprctl dispatch exit`.
+> **uwsm env (SHIPPED in dotfiles).** Under uwsm, `hl.env(...)` in `hyprland.lua`
+> does NOT reach the systemd/dbus activation environment, so user services don't
+> inherit it. The dotfiles `uwsm` stow module now carries env in
+> `~/.config/uwsm/{env,env-hyprland}`: Nvidia vars (`LIBVA_DRIVER_NAME`,
+> `GBM_BACKEND`, `__GLX_VENDOR_LIBRARY_NAME`), `XDG_DATA_DIRS` (appended), `PATH`,
+> and `SSH_AUTH_SOCK` (computed via `gpgconf --list-dirs agent-ssh-socket` → the
+> gpg-agent ssh socket) in `env`; `HYPR*`/cursor vars in `env-hyprland`. Quickshell
+> logout routes through `scripts/.../session-logout` (`uwsm stop` when uwsm-active,
+> else `hyprctl dispatch exit`). Inert on sfx14 (launches Hyprland without uwsm).
 
 ## Rollback
 
