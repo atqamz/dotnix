@@ -18,7 +18,17 @@
     description = "Atqa Munzir";
     extraGroups = [ "wheel" "networkmanager" "video" "libvirtd" "input" ];
     shell = pkgs.bash; # fish is installed as a pkg; switch here if you want it as login shell
-    # SSH key restore is still handled out-of-band (your secrets repo), not here.
+
+    # Classic-ssh allow-list = whatever keys are on github.com/atqamz.keys (every
+    # device I own + my GPG [A] subkey served by gpg-agent). Pinned by sha256 so
+    # eval stays reproducible; rebump when adding/removing a key on GitHub:
+    #   curl -fsSL https://github.com/atqamz.keys | sha256sum
+    openssh.authorizedKeys.keyFiles = [
+      (builtins.fetchurl {
+        url = "https://github.com/atqamz.keys";
+        sha256 = "95283aa4b77d5ca9b711ae8b462e26f278dd89ba7fda69e5b4ffffdc4cdc3c1c";
+      })
+    ];
   };
 
   # Passwordless sudo for wheel matches the current pavg15 setup the agent relied on.
@@ -44,6 +54,10 @@
 
   # --- Tailscale --------------------------------------------------------------
   services.tailscale.enable = true;
+  # Tailnet-identity SSH (no key mgmt) — the clean path for nixos-anywhere over the
+  # tailnet. Needs a tailnet ACL granting ssh to this device; `tailscale up` applies
+  # the flag (re-run `tailscale up` once after first switch if it was already up).
+  services.tailscale.extraUpFlags = [ "--ssh" ];
 
   # IMPORTANT: keep in sync with the NixOS release you install from.
   system.stateVersion = "25.05";
