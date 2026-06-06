@@ -34,18 +34,15 @@ in
   imports = [ inputs.sops-nix.homeManagerModules.sops ];
 
   sops = {
-    # Every secret has two recipients (see secrets/.sops.yaml): this machine's
-    # age key and the GPG primary. age is the headless path — sops-install-secrets
-    # reads the plaintext key file with no pinentry, so the user service decrypts
-    # at boot even with gpg locked (the bug that left ~/.ssh/* dangling each boot).
-    # The age private key is machine-local plaintext (mode 600), never in any repo;
-    # bootstrap it once with `age-keygen -o ~/.config/sops/age/keys.txt`.
+    # Decrypt via the age key, NOT gpg. Every secret has two recipients (see
+    # secrets/.sops.yaml: this age key + the GPG primary), but sops-nix forbids
+    # configuring both ageKeyFile and gnupgHome at once, so the service uses age
+    # exclusively. age reads a plaintext key file with no pinentry, so the user
+    # service decrypts at boot even with gpg locked — fixing the bug that left
+    # ~/.ssh/* dangling each boot. (Manual `gpg -d`/`sops -d` still works via the
+    # GPG recipient.) The age private key is machine-local plaintext (mode 600),
+    # never committed; bootstrap once with `age-keygen -o ~/.config/sops/age/keys.txt`.
     age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
-
-    # GPG kept as the second recipient/decrypt path for redundancy and for
-    # interactive use; age is tried first and succeeds without a display.
-    gnupg.home = "${config.home.homeDirectory}/.gnupg";
-    gnupg.sshKeyPaths = [ ];
 
     validateSopsFiles = false;
     defaultSopsFormat = "binary";
@@ -104,12 +101,10 @@ in
     run install -d -m700 "$HOME/.ssh"
   '';
 
-  # The module wires sops-nix.service to graphical-session-pre.target whenever
-  # gnupg.home is set. Under uwsm that target activates BEFORE the compositor
-  # finalizes WAYLAND_DISPLAY, so gpg-agent could be asked to unlock the key with
-  # no display for pinentry-qt. Pin it to graphical-session.target instead, which
-  # uwsm only reaches after `uwsm finalize` exports WAYLAND_DISPLAY.
-  systemd.user.services.sops-nix.Install.WantedBy = lib.mkForce [ "graphical-session.target" ];
+  # No graphical-session pin: that workaround only existed to delay decryption
+  # until uwsm exported WAYLAND_DISPLAY for the gpg pinentry-qt. age decrypts with
+  # a plaintext key file and no pinentry, so the default sops-nix wiring is fine
+  # and secrets materialize without waiting on the compositor.
 
   # Import the armored GPG secret keys into ~/.gnupg once per login, after sops
   # has placed them. After+Requires order it; WantedBy only pulls it in.
