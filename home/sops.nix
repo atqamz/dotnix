@@ -34,7 +34,16 @@ in
   imports = [ inputs.sops-nix.homeManagerModules.sops ];
 
   sops = {
-    # Decrypt with the GPG key already in ~/.gnupg, not age, not ssh-derived.
+    # Every secret has two recipients (see secrets/.sops.yaml): this machine's
+    # age key and the GPG primary. age is the headless path — sops-install-secrets
+    # reads the plaintext key file with no pinentry, so the user service decrypts
+    # at boot even with gpg locked (the bug that left ~/.ssh/* dangling each boot).
+    # The age private key is machine-local plaintext (mode 600), never in any repo;
+    # bootstrap it once with `age-keygen -o ~/.config/sops/age/keys.txt`.
+    age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+
+    # GPG kept as the second recipient/decrypt path for redundancy and for
+    # interactive use; age is tried first and succeeds without a display.
     gnupg.home = "${config.home.homeDirectory}/.gnupg";
     gnupg.sshKeyPaths = [ ];
 
