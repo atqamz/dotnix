@@ -19,6 +19,11 @@
     # runtime path strings — NOT a flake input, so eval/lock never needs them.
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Declarative disk partitioning — enables a fully-remote reproducible reinstall
+    # via nixos-anywhere. disko owns the fileSystems (see hosts/pavg15/disk.nix).
+    disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, hyprland, home-manager, ... }@inputs: {
@@ -26,6 +31,8 @@
       system = "x86_64-linux";
       specialArgs = { inherit inputs; };
       modules = [
+        inputs.disko.nixosModules.disko
+        ./hosts/pavg15/disk.nix
         ./hosts/pavg15/hardware-configuration.nix
         ./hosts/pavg15/configuration.nix
         ./modules/gpu.nix

@@ -1,7 +1,15 @@
 # pavg15 NixOS install runbook
 
-Physical install. Run at the machine off a NixOS ISO. Nothing here is driven
-remotely — partitioning and `nixos-install` happen at the keyboard.
+Two paths to a provisioned pavg15:
+
+- **Reproducible reinstall via nixos-anywhere (PREFERRED)** — disko
+  (`hosts/pavg15/disk.nix`) owns the disk layout, so a single command partitions,
+  formats, and installs over the network. See the next section. No keyboard
+  partitioning, no `nixos-generate-config`.
+- **Physical install at the keyboard** — the original cold-metal flow below
+  ("Boot ISO + partition" onward). Still valid, but now that disko owns
+  `fileSystems`, the manual `nixos-generate-config` step must STRIP its
+  `fileSystems`/`swapDevices` blocks (see that section).
 
 ## Disk facts (captured from live Fedora 44, 2026-06-05)
 
@@ -42,7 +50,44 @@ Firmware boot entries (efibootmgr) — for awareness, not action:
    (see Post-boot).
 5. Write the NixOS ISO (unstable, matching nixpkgs channel) to USB.
 
+## Reproducible reinstall via nixos-anywhere (disko)
+
+disko (`hosts/pavg15/disk.nix`) declares the layout — 1G ESP `/boot` + btrfs
+subvols root/home/nix (zstd:1) on `/dev/nvme0n1`. nixos-anywhere reads that,
+wipes + partitions + formats the target, then installs the flake closure.
+
+Prereqs:
+- Target is reachable over ssh **as root** and runs a kexec-capable Linux (the
+  live NixOS ISO already booted, or any distro nixos-anywhere can kexec into).
+  Over the tailnet this is `root@<pavg15-tailscale-ip>` — tailscale SSH
+  (`services.tailscale.extraUpFlags = [ "--ssh" ]`) plus a tailnet ACL granting
+  root, or the ISO's root authorized_keys.
+- Run from a machine with `nix` (sfx14 has none — run from pavg15 itself once
+  booted, or any nix host).
+
+```sh
+# DESTROYS /dev/nvme0n1 on the target. sda (Windows data) is untouched — disk.nix
+# names /dev/nvme0n1 explicitly.
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#pavg15 \
+  root@<pavg15-host-or-tailscale-ip>
+```
+
+nixos-anywhere copies the flake, runs disko (partition + format + mount), installs,
+and reboots into the new system. No `nixos-generate-config` — disko + the trimmed
+`hardware-configuration.nix` (hardware bits only) are the whole story. user `atqa`
+ssh is authorised from `github.com/atqamz.keys`; tailscale SSH covers root.
+
+> First-boot secret restore (gpg `[A]` subkey import → sops-nix → ssh) is unchanged
+> — see Post-boot. nixos-anywhere provisions the system; the HM/secret bootstrap
+> still runs at first login.
+
 ## Boot ISO + partition `nvme0n1` ONLY
+
+> Legacy cold-metal path. disko can do this for you (above). If you partition by
+> hand here, the disk gets NO `disk-main-*` GPT partlabels, so the disko config
+> will not in-place `nixos-rebuild switch` until relabelled (`sgdisk -c`) or
+> reinstalled via nixos-anywhere.
 
 Boot the ISO (firmware `Boot9999 USB Drive (UEFI)` or one-time boot menu).
 
@@ -95,10 +140,12 @@ sudo nix-shell -p git --run '
 '
 ```
 
-Diff the generated file against the placeholder; keep the generated
-`fileSystems`/`boot.initrd` lines. Confirm `boot.loader.systemd-boot.enable`
-and `boot.loader.efi.canTouchEfiVariables` are set (in `configuration.nix`); if
-not, add them so the bootloader installs.
+Diff the generated file against the committed one; keep the generated
+`boot.initrd`/`boot.kernelModules` lines, but **delete the generated
+`fileSystems` and `swapDevices` blocks** — disko (`disk.nix`) owns those now, and
+leaving them in causes a conflicting-definition eval error. Confirm
+`boot.loader.systemd-boot.enable` and `boot.loader.efi.canTouchEfiVariables` are
+set (in `configuration.nix`); if not, add them so the bootloader installs.
 
 > If you edit the hardware file, commit it inside `/mnt/root/dotnix` (or carry
 > the change back to the repo after first boot) so the flake stays reproducible.
