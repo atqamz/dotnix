@@ -3,7 +3,7 @@
   # --- Boot (UEFI -> systemd-boot) -------------------------------------------
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
-  boot.loader.efi.efiSysMountPoint = "/boot/efi";
+  boot.loader.efi.efiSysMountPoint = "/boot"; # ESP mounted directly at /boot (single ESP + btrfs, no split /boot)
 
   # --- Identity / network ----------------------------------------------------
   networking.hostName = "pavg15";
