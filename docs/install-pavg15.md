@@ -132,18 +132,40 @@ SOPS GPG key is unlocked through pinentry-qt, which needs a Wayland display.
    activation using the GPG key in `~/.gnupg`, so it must be imported and unlocked
    first. gpg-agent is not serving SSH yet (the personal SSH identity is the GPG
    `[A]` auth subkey, served only after this import) — clone the secrets repo over
-   HTTPS (PAT / `gh auth login`), not SSH:
+   HTTPS (PAT / `gh auth login`), not SSH.
+
+   Base NixOS ships no `gpg`/`gh`/`sops` and no pinentry, so run the whole
+   bootstrap inside one ephemeral shell. **A piped `gpg --decrypt | gpg --import`
+   does NOT work here:** the import side inherits the pipe as stdin, pinentry-curses
+   can't grab a tty, and it dies with `Inappropriate ioctl for device`. Set
+   `GPG_TTY`, decrypt to a tmpfs file, then import from that file:
    ```sh
+   nix-shell -p gnupg pinentry-curses sops gh git
+   # inside the shell:
+   gh auth login                                              # browser/device, no PAT needed
    git clone https://github.com/atqamz/secrets ~/repo/secrets
    cd ~/repo/secrets
-   gpg --decrypt gpg/personal.asc.gpg | gpg --import          # outer AES256 wrapper passphrase
+
+   # point gpg-agent at a pinentry that exists (the nix-shell one):
+   mkdir -p ~/.gnupg && chmod 700 ~/.gnupg
+   echo "pinentry-program $(command -v pinentry-curses)" > ~/.gnupg/gpg-agent.conf
+
+   export GPG_TTY=$(tty)                                      # else pinentry-curses: Inappropriate ioctl
+   umask 077
+   gpg --pinentry-mode loopback -o /dev/shm/p.asc -d gpg/personal.asc.gpg   # outer AES256 passphrase on tty
+   gpg --import /dev/shm/p.asc                                # "secret key imported"
+   shred -u /dev/shm/p.asc
    echo 'F1F60517602888C8D5E486EB8AD7D4A302EE6771:6:' | gpg --import-ownertrust
+   gpg -K                                                     # confirm: sec F1F60517... + ssb [E] + ssb [A]
+
    # Prime the key ITSELF: `gpg --import` caches only the wrapper passphrase, not
    # the imported key's own. Exercise it once so gpg-agent caches it (24h TTL)
    # before the switch, else sops-nix.service fires pinentry mid-activation:
    SOPS_GPG_EXEC=gpg sops -d ssh/yes2infra_ed25519.sops.key >/dev/null
-   echo test | gpg --clearsign >/dev/null                     # signing key == SOPS key; confirm it works
    ```
+   The hand-written `~/.gnupg/gpg-agent.conf` here is throwaway — the first
+   `home-manager switch` replaces it with the declarative pinentry-qt config
+   (see step 3's `-b backup`).
 
 3. **Home-Manager** — source dotfiles, then apply. The first eval fetches
    `sops-nix` and writes its `flake.lock` entry (the lock has no sops-nix node yet
@@ -151,8 +173,12 @@ SOPS GPG key is unlocked through pinentry-qt, which needs a Wayland display.
    ```
    git clone https://github.com/atqamz/dotfiles ~/dotfiles   # symlink targets
    cd ~/repo/dotnix   # or wherever the flake lives post-install
-   nix run home-manager -- switch --flake .#atqa
+   nix run home-manager -- switch --flake .#atqa -b backup
    ```
+   `-b backup` is REQUIRED on the first switch: `checkLinkTargets` aborts on any
+   pre-existing file HM wants to manage. Two always collide — the stale
+   `~/.config/hypr` dir and the throwaway `~/.gnupg/gpg-agent.conf` from step 2;
+   `-b backup` moves each to `*.backup` and proceeds.
    On switch, `sops-nix.service` decrypts `ssh/*` to `~/.ssh` and places the
    armored `gpg/*` keys, which `gpg-import-keys.service` then imports into
    `~/.gnupg`. `home/desktop-links.nix` symlinks `~/.config/{hypr,quickshell}` →
@@ -164,6 +190,9 @@ SOPS GPG key is unlocked through pinentry-qt, which needs a Wayland display.
    systemctl --user status sops-nix.service gpg-import-keys.service  # active/exited, 0
    ssh-add -l                                                        # gpg-agent serves the [A] auth subkey
    ssh -T git@github.com                                             # auth via that subkey
+   # If ssh-add says "Could not open a connection to your authentication agent",
+   # SSH_AUTH_SOCK is unset (bare/non-login shell). Real Hyprland login exports it
+   # (bashrc/uwsm env); in a stray shell: export SSH_AUTH_SOCK="$(gpgconf --list-dirs agent-ssh-socket)"
    gpg -K                                                            # blankon/deploy-*/password-store present
    ls -ld ~/.ssh                                                     # drwx------ (0700), not 0751
    ```
