@@ -58,7 +58,20 @@
     };
   };
 
-  programs.bash.enable = true;
+  programs.bash = {
+    enable = true;
+    initExtra = ''
+      # Fedora ships the prompt, colors, and completion in /etc/bashrc; source it
+      # when present (no-op on NixOS, which wires bash up its own way).
+      [ -f /etc/bashrc ] && . /etc/bashrc
+
+      # ssh served by gpg-agent (enable-ssh-support): set the socket if no graphical
+      # session manager already exported it (e.g. a bare tty login).
+      if [ -z "$SSH_AUTH_SOCK" ] && command -v gpgconf >/dev/null 2>&1; then
+        export SSH_AUTH_SOCK="$(gpgconf --list-dirs agent-ssh-socket)"
+      fi
+    '';
+  };
 
   # Public half of the gpg [A] auth subkey. ssh's `IdentityFile ~/.ssh/id_ed25519`
   # (with IdentitiesOnly) resolves this .pub and asks gpg-agent for the matching
