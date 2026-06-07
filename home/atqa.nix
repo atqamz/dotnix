@@ -2,6 +2,7 @@
 {
   imports = [
     ./shell.nix
+    ./packages.nix
     ./tmux.nix
     ./git.nix
     ./desktop-links.nix
