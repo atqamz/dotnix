@@ -17,6 +17,7 @@
     unzip
     p7zip
     wget
+    nodejs        # npx runtime for globally-spawned MCP servers (e.g. context7)
   ];
 
   # gh manages only non-secret config here; the auth token stays machine-local in
