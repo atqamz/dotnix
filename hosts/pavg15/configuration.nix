@@ -19,6 +19,13 @@
     extraGroups = [ "wheel" "networkmanager" "video" "libvirtd" "input" ];
     shell = pkgs.bash; # fish is installed as a pkg; switch here if you want it as login shell
 
+    # Initial login password so a from-scratch nixos-anywhere install is reachable
+    # without console rescue (the box is wifi-only + headless on first boot). sha-512
+    # crypt hash, not plaintext -- safe to commit like /etc/shadow. mutableUsers stays
+    # true, so `passwd` after first login persists and overrides this. CHANGE after login.
+    #   regenerate: openssl passwd -6
+    initialHashedPassword = "$6$juyklcj3FWrgjPeF$wXX4O3IT0I23hivDGQ0bauN94H7C3Bdqp5TIhSwvZQLw2yYPlXXX7Reo/rrj/LUXknnvMk2UamCiq0CG6/kHq/";
+
     # Classic-ssh allow-list = whatever keys are on github.com/atqamz.keys (every
     # device I own + my GPG [A] subkey served by gpg-agent). Pinned by sha256 so
     # eval stays reproducible; rebump when adding/removing a key on GitHub:
